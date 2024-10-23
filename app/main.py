@@ -10,16 +10,27 @@ def handle_client(conn, addr, directory):
     print(request)
     
     # HTTP 요청 파싱
-    headers = request.split('\r\n')
+    headers, body = request.split('\r\n\r\n', 1)
+    headers = headers.split('\r\n')
     request_line = headers[0]
     method, target, _ = request_line.split(' ')
     
     # User-Agent 헤더 찾기 (대소문자 구분 없이)
     user_agent = ''
+    
+    # Content-Length 헤더 찾기
+    content_length = 0
+    
     for header in headers:
         if header.lower().startswith('user-agent:'):
             user_agent = header.split(':', 1)[1].strip()
-            break
+        elif header.lower().startswith('content-length:'):
+            content_length = int(header.split(':', 1)[1].strip())
+    
+    # 요청 본문 읽기
+    if content_length > 0:
+        # body = conn.recv(content_length).decode('utf-8')
+        print("body:", body)
     
     if method == 'GET':
         if target == '/':
@@ -44,8 +55,17 @@ def handle_client(conn, addr, directory):
                 response = b"HTTP/1.1 404 Not Found\r\n\r\n"
         else:
             response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+    elif method == 'POST':
+        if target.startswith('/files/'):
+            filename = target[7:]  # '/files/' 이후의 문자열 추출
+            file_path = os.path.join(directory, filename)
+            with open(file_path, 'w') as file:
+                file.write(body)
+            response = b"HTTP/1.1 201 Created\r\n\r\n"
+        else:
+            response = b"HTTP/1.1 404 Not Found\r\n\r\n"
     else:
-        response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+        response = b"HTTP/1.1 405 Method Not Allowed\r\n\r\n"
     
     conn.sendall(response)
     conn.close()
